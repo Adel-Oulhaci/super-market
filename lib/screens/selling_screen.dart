@@ -84,8 +84,8 @@ class _SellingScreenState extends State<SellingScreen>
   // Create a persistent text controller for the Autocomplete field.
   final TextEditingController _searchController = TextEditingController();
 
-  // Create a combined search controller
-  final TextEditingController _combinedSearchController =
+  // Create a combined search controller.
+  late TextEditingController _combinedSearchController =
       TextEditingController();
 
   // Define your available products list.
@@ -94,7 +94,6 @@ class _SellingScreenState extends State<SellingScreen>
     Product(name: "Apple", price: 1.99, barcode: "1738521408713"),
     Product(name: "Banana", price: 1.99, barcode: "6134318000040"),
     Product(name: "Orange", price: 1.99, barcode: "1738721408743"),
-
     // Add other products as needed...
   ];
 
@@ -201,7 +200,8 @@ class _SellingScreenState extends State<SellingScreen>
       // Save the purchase record.
       PurchaseRecord record = PurchaseRecord(
         dateTime: DateTime.now(),
-        purchasedProducts: List.from(sessions[_tabController.index].selectedProducts),
+        purchasedProducts:
+            List.from(sessions[_tabController.index].selectedProducts),
         loyalCustomer: customerName,
         totalPrice: totalPrice,
         amountPaid: result.amountPaid,
@@ -239,14 +239,18 @@ class _SellingScreenState extends State<SellingScreen>
     return SizedBox(
       height: 48,
       child: Autocomplete<Product>(
+        // This optionsBuilder returns suggestions only when the text is nonempty
+        // and does not contain only digits.
         optionsBuilder: (TextEditingValue textEditingValue) {
-          if (textEditingValue.text.isEmpty) {
+          final input = textEditingValue.text;
+          if (input.isEmpty || RegExp(r'^\d+$').hasMatch(input)) {
             return const Iterable<Product>.empty();
           }
-          final query = textEditingValue.text.toLowerCase();
-          return availableProducts.where((Product product) =>
-              product.name.toLowerCase().contains(query) ||
-              product.barcode.toString().toLowerCase().contains(query));
+          final query = input.toLowerCase();
+          // Filter products that start with the given query.
+          return availableProducts.where(
+            (Product product) => product.name.toLowerCase().startsWith(query),
+          );
         },
         displayStringForOption: (Product product) => product.name,
         fieldViewBuilder: (
@@ -255,50 +259,77 @@ class _SellingScreenState extends State<SellingScreen>
           FocusNode focusNode,
           VoidCallback onFieldSubmitted,
         ) {
-          // Synchronize our persistent controller.
-          textEditingController.text = _combinedSearchController.text;
-          // Use our persistent focus node.
+          // Assign the provided controller to our persistent (state) controller.
+          _combinedSearchController = textEditingController;
           return TextField(
             controller: _combinedSearchController,
-            focusNode: _combinedSearchFocusNode,
-            autofocus: true,
+            focusNode: focusNode,
+            autofocus: false,
             decoration: InputDecoration(
               labelText: 'Search by Name or Barcode',
               border: const OutlineInputBorder(),
               suffixIcon: _combinedSearchController.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear),
-                      onPressed: _clearCombinedSearch,
+                      onPressed: () {
+                        _combinedSearchController.clear();
+                        setState(() {}); // Refresh suggestions/status.
+                      },
                     )
                   : null,
             ),
-            onChanged: (_) => setState(() {}),
+            onChanged: (value) => setState(() {}),
             onSubmitted: (value) {
+              // When submitting, if the input is numeric,
+              // we assume a barcode and process it directly.
               final query = value.trim();
+              if (query.isEmpty) {
+                _combinedSearchController.clear();
+                setState(() {});
+                return;
+              }
               Product? matchingProduct;
-              try {
-                matchingProduct = availableProducts.firstWhere(
-                  (product) =>
-                      product.barcode.toString().toLowerCase() ==
-                      query.toLowerCase(),
-                );
-              } catch (e) {
-                matchingProduct = null;
+              if (RegExp(r'^\d+$').hasMatch(query)) {
+                // Try to match barcode.
+                try {
+                  matchingProduct = availableProducts.firstWhere(
+                    (product) =>
+                        product.barcode.toLowerCase() == query.toLowerCase(),
+                  );
+                } catch (e) {
+                  matchingProduct = null;
+                }
+              } else {
+                // Otherwise, match by product name starting with the query.
+                try {
+                  matchingProduct = availableProducts.firstWhere(
+                    (product) =>
+                        product.name.toLowerCase().startsWith(query.toLowerCase()),
+                  );
+                } catch (e) {
+                  matchingProduct = null;
+                }
               }
               if (matchingProduct != null) {
                 setState(() {
                   _addProductToSession(matchingProduct!);
                 });
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('No product found for "$query".')),
+                );
               }
-              _clearCombinedSearch();
+              // Always clear the search field after submission.
+              _combinedSearchController.clear();
             },
           );
         },
         onSelected: (Product product) {
+          // When a suggestion is chosen, add it to the session and clear the field.
           setState(() {
             _addProductToSession(product);
           });
-          _clearCombinedSearch();
+          _combinedSearchController.clear();
         },
       ),
     );
@@ -307,8 +338,10 @@ class _SellingScreenState extends State<SellingScreen>
   /// Adds the product to the current session.
   /// If the product (by barcode) is already present, increment its quantity.
   void _addProductToSession(Product product) {
-    List<Product> sessionProducts = sessions[_tabController.index].selectedProducts;
-    final int existingIndex = sessionProducts.indexWhere((p) => p.barcode == product.barcode);
+    List<Product> sessionProducts =
+        sessions[_tabController.index].selectedProducts;
+    final int existingIndex =
+        sessionProducts.indexWhere((p) => p.barcode == product.barcode);
     if (existingIndex != -1) {
       sessionProducts[existingIndex].quantity++;
     } else {
@@ -317,12 +350,10 @@ class _SellingScreenState extends State<SellingScreen>
     }
   }
 
-  /// Clears the search input and immediately re-requests focus.
+  /// Clears the search input and hides the suggestion menu.
   void _clearCombinedSearch() {
     _combinedSearchController.clear();
-    Future.delayed(Duration.zero, () {
-      _combinedSearchFocusNode.requestFocus();
-    });
+    _combinedSearchFocusNode.unfocus();
     setState(() {});
   }
 
@@ -516,8 +547,9 @@ class _SellingScreenState extends State<SellingScreen>
                       ),
                       child: ListTile(
                         title: Text(product.name),
+                        // Display only the price here since quantity is editable in the trailing field.
                         subtitle: Text(
-                            'Price: \$${product.price.toStringAsFixed(2)} | Quantity: ${product.quantity}'),
+                            'Price: \$${product.price.toStringAsFixed(2)}'),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -526,14 +558,31 @@ class _SellingScreenState extends State<SellingScreen>
                               tooltip: 'Delete Item',
                               onPressed: () => _deleteProduct(index),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.remove),
-                              onPressed: () => _decrementQuantity(index),
-                            ),
-                            Text('${product.quantity}'),
-                            IconButton(
-                              icon: const Icon(Icons.add),
-                              onPressed: () => _incrementQuantity(index),
+                            SizedBox(
+                              width: 60,
+                              child: TextFormField(
+                                initialValue: product.quantity.toString(),
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly
+                                ],
+                                textAlign: TextAlign.center,
+                                decoration: const InputDecoration(
+                                  contentPadding:
+                                      EdgeInsets.symmetric(vertical: 8.0),
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                onFieldSubmitted: (value) {
+                                  int? newQuantity = int.tryParse(value) ?? 1;
+                                  if (newQuantity < 1) {
+                                    newQuantity = 1;
+                                  }
+                                  setState(() {
+                                    product.quantity = newQuantity!;
+                                  });
+                                },
+                              ),
                             ),
                           ],
                         ),
@@ -594,7 +643,8 @@ class _SellingScreenState extends State<SellingScreen>
           children: [
             for (final session in sessions) _buildSessionContent(session),
             Container(
-              child: Center(child: Text("Tap the '+' tab to add a new session")),
+              child:
+                  Center(child: Text("Tap the '+' tab to add a new session")),
             )
           ],
         ),
@@ -643,8 +693,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
           const SizedBox(height: 12),
           TextField(
             controller: _amountController,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(
               labelText: 'Amount Paid',
               border: OutlineInputBorder(),
@@ -667,8 +716,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
             final amountPaid = double.tryParse(_amountController.text) ?? 0.0;
             if (amountPaid < widget.totalPrice) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Amount paid is insufficient')),
+                const SnackBar(content: Text('Amount paid is insufficient')),
               );
               return;
             }
