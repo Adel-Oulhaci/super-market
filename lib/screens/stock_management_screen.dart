@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 class StockProduct {
   final String id; // Unique product identifier.
   String name;
-  double? buyingPrice;   // Changed to nullable for safety.
-  double? sellingPrice;  // Changed to nullable for safety.
+  double? buyingPrice; // Changed to nullable for safety.
+  double? sellingPrice; // Changed to nullable for safety.
   int stock;
   List<String> barcodes;
 
@@ -33,11 +33,37 @@ class StockManagementScreen extends StatefulWidget {
 class _StockManagementScreenState extends State<StockManagementScreen> {
   // Sample list of products in stock.
   List<StockProduct> products = [
-    StockProduct(id: '1', name: 'Apple', buyingPrice: 0.80, sellingPrice: 1.20, stock: 50, barcodes: ['111111']),
-    StockProduct(id: '2', name: 'Banana', buyingPrice: 0.30, sellingPrice: 0.50, stock: 100),
-    StockProduct(id: '3', name: 'Orange', buyingPrice: 0.50, sellingPrice: 0.80, stock: 80),
-    StockProduct(id: '4', name: 'Milk', buyingPrice: 1.20, sellingPrice: 1.50, stock: 30),
-    StockProduct(id: '5', name: 'Bread', buyingPrice: 1.80, sellingPrice: 2.00, stock: 20),
+    StockProduct(
+        id: '1',
+        name: 'Apple',
+        buyingPrice: 0.80,
+        sellingPrice: 1.20,
+        stock: 50,
+        barcodes: ['111111']),
+    StockProduct(
+        id: '2',
+        name: 'Banana',
+        buyingPrice: 0.30,
+        sellingPrice: 0.50,
+        stock: 100),
+    StockProduct(
+        id: '3',
+        name: 'Orange',
+        buyingPrice: 0.50,
+        sellingPrice: 0.80,
+        stock: 80),
+    StockProduct(
+        id: '4',
+        name: 'Milk',
+        buyingPrice: 1.20,
+        sellingPrice: 1.50,
+        stock: 30),
+    StockProduct(
+        id: '5',
+        name: 'Bread',
+        buyingPrice: 1.80,
+        sellingPrice: 2.00,
+        stock: 20),
   ];
 
   // Controller for the product search field.
@@ -88,7 +114,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
   /// Updated _scanBarcode method with an extra parameter.
   /// When useRootNavigator is true the dialog uses the root navigator,
   /// helping avoid nested dialog freezes.
-  Future<String?> _scanBarcode({BuildContext? customContext, bool useRootNavigator = false}) async {
+  Future<String?> _scanBarcode(
+      {BuildContext? customContext, bool useRootNavigator = false}) async {
     final BuildContext effectiveContext = customContext ?? context;
     return await showDialog<String>(
       context: effectiveContext,
@@ -110,7 +137,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
               child: const Text("Cancel"),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(barcodeController.text.trim()),
+              onPressed: () =>
+                  Navigator.of(context).pop(barcodeController.text.trim()),
               child: const Text("OK"),
             ),
           ],
@@ -127,9 +155,12 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
 
     // Create text controllers for each input field.
     final TextEditingController nameController = TextEditingController();
-    final TextEditingController buyingPriceController = TextEditingController(text: "0.0");
-    final TextEditingController sellingPriceController = TextEditingController(text: "0.0");
-    final TextEditingController stockController = TextEditingController(text: "1");
+    final TextEditingController buyingPriceController =
+        TextEditingController(text: "0.0");
+    final TextEditingController sellingPriceController =
+        TextEditingController(text: "0.0");
+    final TextEditingController stockController =
+        TextEditingController(text: "1");
 
     await showDialog(
       context: context,
@@ -155,7 +186,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Buying Price',
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -163,7 +195,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Selling Price',
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -188,14 +221,14 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                     double.tryParse(buyingPriceController.text.trim());
                 final double? sellingPrice =
                     double.tryParse(sellingPriceController.text.trim());
-                final int? stock =
-                    int.tryParse(stockController.text.trim());
+                final int? stock = int.tryParse(stockController.text.trim());
                 if (name.isEmpty ||
                     buyingPrice == null ||
                     sellingPrice == null ||
                     stock == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Please enter valid product details")),
+                    const SnackBar(
+                        content: Text("Please enter valid product details")),
                   );
                   return;
                 }
@@ -261,7 +294,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Buying Price',
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                     ),
                     const SizedBox(height: 8),
                     // Edit selling price.
@@ -270,7 +304,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Selling Price',
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                     ),
                     const SizedBox(height: 8),
                     // Edit stock quantity.
@@ -295,7 +330,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                               customContext: context,
                               useRootNavigator: true,
                             );
-                            if (scannedBarcode != null && scannedBarcode.isNotEmpty) {
+                            if (scannedBarcode != null &&
+                                scannedBarcode.isNotEmpty) {
                               setModalState(() {
                                 currentBarcodes.add(scannedBarcode);
                               });
@@ -341,7 +377,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                         double.tryParse(buyingPriceController.text.trim());
                     final double? newSellingPrice =
                         double.tryParse(sellingPriceController.text.trim());
-                    final int? newStock = int.tryParse(stockController.text.trim());
+                    final int? newStock =
+                        int.tryParse(stockController.text.trim());
                     if (newName.isEmpty ||
                         newBuyingPrice == null ||
                         newSellingPrice == null ||
@@ -420,14 +457,18 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
         existingProduct?.stock++;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Increased stock for ${existingProduct.name} by 1")),
+        SnackBar(
+            content: Text("Increased stock for ${existingProduct.name} by 1")),
       );
     } else {
       // Otherwise, open a dialog to add new product details.
       final TextEditingController nameController = TextEditingController();
-      final TextEditingController buyingPriceController = TextEditingController(text: "0.0");
-      final TextEditingController sellingPriceController = TextEditingController(text: "0.0");
-      final TextEditingController stockController = TextEditingController(text: "1");
+      final TextEditingController buyingPriceController =
+          TextEditingController(text: "0.0");
+      final TextEditingController sellingPriceController =
+          TextEditingController(text: "0.0");
+      final TextEditingController stockController =
+          TextEditingController(text: "1");
 
       await showDialog(
         context: context,
@@ -453,7 +494,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Buying Price',
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -461,7 +503,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Selling Price',
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -482,15 +525,18 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
               ElevatedButton(
                 onPressed: () {
                   final String name = nameController.text.trim();
-                  final double? buyingPrice = double.tryParse(buyingPriceController.text.trim());
-                  final double? sellingPrice = double.tryParse(sellingPriceController.text.trim());
+                  final double? buyingPrice =
+                      double.tryParse(buyingPriceController.text.trim());
+                  final double? sellingPrice =
+                      double.tryParse(sellingPriceController.text.trim());
                   final int? stock = int.tryParse(stockController.text.trim());
                   if (name.isEmpty ||
                       buyingPrice == null ||
                       sellingPrice == null ||
                       stock == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Please enter valid product details")),
+                      const SnackBar(
+                          content: Text("Please enter valid product details")),
                     );
                     return;
                   }
@@ -556,7 +602,8 @@ class _StockManagementScreenState extends State<StockManagementScreen> {
               itemBuilder: (context, index) {
                 final product = filteredProducts[index];
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                  margin: const EdgeInsets.symmetric(
+                      horizontal: 8.0, vertical: 4.0),
                   child: ListTile(
                     title: Text(product.name),
                     subtitle: Text(

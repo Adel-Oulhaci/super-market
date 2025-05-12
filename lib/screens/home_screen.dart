@@ -1,6 +1,5 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
-import 'package:supermarket_app/screens/analytics_screen.dart';
 import 'selling_screen.dart';
 import 'stock_management_screen.dart';
 import 'smart_carts_screen.dart';
@@ -130,23 +129,7 @@ class HomeScreen extends StatelessWidget {
                     },
                   ),
                 ),
-                Card(
-                  elevation: 3,
-                  child: ListTile(
-                    leading: const Icon(Icons.analytics, size: 36),
-                    title: const Text("Analytics"),
-                    subtitle: const Text("View daily/weekly/monthly profit, top sold products and loyal customers"),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => AnalyticsScreen(saleTransactions: saleTransactions),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                
               ],
             ),
           ),

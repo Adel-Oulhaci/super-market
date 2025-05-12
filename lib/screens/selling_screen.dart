@@ -79,21 +79,16 @@ class SellingScreen extends StatefulWidget {
 class _SellingScreenState extends State<SellingScreen>
     with TickerProviderStateMixin {
   final FocusNode _focusNode = FocusNode();
-  final FocusNode _combinedSearchFocusNode = FocusNode();
-
-  // Create a persistent text controller for the Autocomplete field.
+  final FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _customerFocusNode = FocusNode();
   final TextEditingController _searchController = TextEditingController();
-
-  // Create a combined search controller.
-  late TextEditingController _combinedSearchController =
-      TextEditingController();
 
   // Define your available products list.
   final List<Product> availableProducts = [
     // When scanning the barcode "1738521408773", this product will be matched.
-    Product(name: "Apple", price: 1.99, barcode: "1738521408713"),
-    Product(name: "Banana", price: 1.99, barcode: "6134318000040"),
-    Product(name: "Orange", price: 1.99, barcode: "1738721408743"),
+    Product(name: "Papier Mouchoir", price: 1.99, barcode: "6130649000131"),
+    Product(name: "Ayris 1.5L", price: 1.99, barcode: "6130534000031"),
+    Product(name: "Abou Sofiane 1L", price: 1.99, barcode: "6135498000028"),
     // Add other products as needed...
   ];
 
@@ -120,9 +115,22 @@ class _SellingScreenState extends State<SellingScreen>
   @override
   void initState() {
     super.initState();
-    // Initialize the TabController in initState to avoid LateInitializationError.
-    // Also, this ensures that by default, the first session ("Session 1") is active.
     _initTabController(initialIndex: 0);
+    // Ensure search field is focused when the screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchFocusNode.requestFocus();
+    });
+  }
+
+  // Handle keyboard shortcuts
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      // Handle * key for quantity multiplication
+      if (event.logicalKey == LogicalKeyboardKey.numpadMultiply ||
+          event.logicalKey == LogicalKeyboardKey.asterisk) {
+        _showQuantityDialog();
+      }
+    }
   }
 
   /// Initializes the TabController based on the number of sessions.
@@ -146,11 +154,10 @@ class _SellingScreenState extends State<SellingScreen>
   @override
   void dispose() {
     _focusNode.dispose();
+    _searchFocusNode.dispose();
+    _customerFocusNode.dispose();
     _searchController.dispose();
-    _combinedSearchController.dispose();
-    _combinedSearchFocusNode.dispose();
     _tabController.dispose();
-    // DO NOT dispose _autocompleteController since Autocomplete manages it.
     super.dispose();
   }
 
@@ -239,17 +246,16 @@ class _SellingScreenState extends State<SellingScreen>
     return SizedBox(
       height: 48,
       child: Autocomplete<Product>(
-        // This optionsBuilder returns suggestions only when the text is nonempty
-        // and does not contain only digits.
         optionsBuilder: (TextEditingValue textEditingValue) {
           final input = textEditingValue.text;
-          if (input.isEmpty || RegExp(r'^\d+$').hasMatch(input)) {
+          if (input.isEmpty) {
             return const Iterable<Product>.empty();
           }
           final query = input.toLowerCase();
-          // Filter products that start with the given query.
           return availableProducts.where(
-            (Product product) => product.name.toLowerCase().startsWith(query),
+            (Product product) =>
+                product.name.toLowerCase().contains(query) ||
+                product.barcode.toLowerCase().contains(query),
           );
         },
         displayStringForOption: (Product product) => product.name,
@@ -259,77 +265,82 @@ class _SellingScreenState extends State<SellingScreen>
           FocusNode focusNode,
           VoidCallback onFieldSubmitted,
         ) {
-          // Assign the provided controller to our persistent (state) controller.
-          _combinedSearchController = textEditingController;
           return TextField(
-            controller: _combinedSearchController,
-            focusNode: focusNode,
-            autofocus: false,
+            controller: textEditingController,
+            focusNode: _searchFocusNode,
+            autofocus: true,
             decoration: InputDecoration(
-              labelText: 'Search by Name or Barcode',
-              border: const OutlineInputBorder(),
-              suffixIcon: _combinedSearchController.text.isNotEmpty
+              labelText: 'Scan or Search Product',
+              hintText: 'Scan barcode or type product name',
+              border: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
+              filled: true,
+              fillColor: Colors.grey[50],
+              prefixIcon: const Icon(Icons.qr_code_scanner),
+              suffixIcon: textEditingController.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear),
                       onPressed: () {
-                        _combinedSearchController.clear();
-                        setState(() {}); // Refresh suggestions/status.
+                        textEditingController.clear();
+                        setState(() {});
+                        _searchFocusNode
+                            .requestFocus(); // Keep focus after clearing
                       },
                     )
                   : null,
             ),
             onChanged: (value) => setState(() {}),
             onSubmitted: (value) {
-              // When submitting, if the input is numeric,
-              // we assume a barcode and process it directly.
               final query = value.trim();
               if (query.isEmpty) {
-                _combinedSearchController.clear();
+                textEditingController.clear();
                 setState(() {});
                 return;
               }
+
               Product? matchingProduct;
-              if (RegExp(r'^\d+$').hasMatch(query)) {
-                // Try to match barcode.
+              try {
+                matchingProduct = availableProducts.firstWhere(
+                  (product) =>
+                      product.barcode.toLowerCase() == query.toLowerCase(),
+                );
+              } catch (e) {
                 try {
                   matchingProduct = availableProducts.firstWhere(
-                    (product) =>
-                        product.barcode.toLowerCase() == query.toLowerCase(),
-                  );
-                } catch (e) {
-                  matchingProduct = null;
-                }
-              } else {
-                // Otherwise, match by product name starting with the query.
-                try {
-                  matchingProduct = availableProducts.firstWhere(
-                    (product) =>
-                        product.name.toLowerCase().startsWith(query.toLowerCase()),
+                    (product) => product.name
+                        .toLowerCase()
+                        .contains(query.toLowerCase()),
                   );
                 } catch (e) {
                   matchingProduct = null;
                 }
               }
+
               if (matchingProduct != null) {
                 setState(() {
                   _addProductToSession(matchingProduct!);
                 });
+                textEditingController.clear();
+                _searchFocusNode
+                    .requestFocus(); // Keep focus after adding product
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('No product found for "$query".')),
+                  SnackBar(
+                    content: Text('No product found for "$query"'),
+                    backgroundColor: Colors.red[400],
+                    behavior: SnackBarBehavior.floating,
+                  ),
                 );
               }
-              // Always clear the search field after submission.
-              _combinedSearchController.clear();
             },
           );
         },
         onSelected: (Product product) {
-          // When a suggestion is chosen, add it to the session and clear the field.
           setState(() {
             _addProductToSession(product);
           });
-          _combinedSearchController.clear();
+          _searchFocusNode.requestFocus(); // Keep focus after selecting product
         },
       ),
     );
@@ -342,18 +353,26 @@ class _SellingScreenState extends State<SellingScreen>
         sessions[_tabController.index].selectedProducts;
     final int existingIndex =
         sessionProducts.indexWhere((p) => p.barcode == product.barcode);
-    if (existingIndex != -1) {
-      sessionProducts[existingIndex].quantity++;
-    } else {
-      // Adding a new product (its quantity is 1 by default).
-      sessionProducts.add(product);
-    }
+
+    setState(() {
+      if (existingIndex != -1) {
+        // If product exists, increment its quantity
+        sessionProducts[existingIndex].quantity++;
+      } else {
+        // If product doesn't exist, add it with quantity 1
+        sessionProducts.add(Product(
+          name: product.name,
+          price: product.price,
+          barcode: product.barcode,
+          quantity: 1,
+        ));
+      }
+    });
   }
 
   /// Clears the search input and hides the suggestion menu.
   void _clearCombinedSearch() {
-    _combinedSearchController.clear();
-    _combinedSearchFocusNode.unfocus();
+    _searchController.clear();
     setState(() {});
   }
 
@@ -376,13 +395,9 @@ class _SellingScreenState extends State<SellingScreen>
         },
         fieldViewBuilder:
             (context, textEditingController, focusNode, onFieldSubmitted) {
-          if (textEditingController.text.isEmpty) {
-            textEditingController.text =
-                sessions[_tabController.index].loyalCustomer;
-          }
           return TextField(
             controller: textEditingController,
-            focusNode: focusNode,
+            focusNode: _customerFocusNode,
             decoration: const InputDecoration(
               labelText: 'Loyal Customer',
               border: OutlineInputBorder(),
@@ -400,6 +415,8 @@ class _SellingScreenState extends State<SellingScreen>
               });
               textEditingController.text =
                   sessions[_tabController.index].loyalCustomer;
+              _searchFocusNode
+                  .requestFocus(); // Return focus to search after submitting
             },
           );
         },
@@ -407,6 +424,8 @@ class _SellingScreenState extends State<SellingScreen>
           setState(() {
             sessions[_tabController.index].loyalCustomer = selection;
           });
+          _searchFocusNode
+              .requestFocus(); // Return focus to search after selecting
         },
       ),
     );
@@ -481,117 +500,103 @@ class _SellingScreenState extends State<SellingScreen>
   /// and a list of the products added to the session.
   ///
   Widget _buildSessionContent(Session session) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Container(
-                padding: const EdgeInsets.all(8.0),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.blue),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: Text(
-                  'Total:\n\$${totalPrice.toStringAsFixed(2)}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14.0,
-                  ),
-                ),
-              ),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 8.0),
-            Expanded(flex: 3, child: _buildCombinedProductSearchBar()),
-          ],
-        ),
-        const SizedBox(height: 16.0),
-        // Row with Loyal Customer field and Auto Print Receipt checkbox beside it.
-        Row(
-          children: [
-            _buildLoyalCustomerField(),
-            const SizedBox(width: 16.0),
-            _buildAutoPrintCheckbox(),
-          ],
-        ),
-        const SizedBox(height: 16.0),
-        // "Clear Session" button clears all scanned products and resets the loyal customer.
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: _clearCurrentSession,
-            child: const Text('Clear Session'),
-          ),
-        ),
-        const SizedBox(height: 8.0),
-        // List of selected products.
-        Expanded(
-          child: session.selectedProducts.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No products selected.',
-                    style: TextStyle(fontSize: 16.0),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: session.selectedProducts.length,
-                  itemBuilder: (context, index) {
-                    final product = session.selectedProducts[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 8.0),
-                      elevation: 3,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.0),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.all(12.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2196F3).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8.0),
                       ),
-                      child: ListTile(
-                        title: Text(product.name),
-                        // Display only the price here since quantity is editable in the trailing field.
-                        subtitle: Text(
-                            'Price: \$${product.price.toStringAsFixed(2)}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.delete),
-                              tooltip: 'Delete Item',
-                              onPressed: () => _deleteProduct(index),
-                            ),
-                            SizedBox(
-                              width: 60,
-                              child: TextFormField(
-                                initialValue: product.quantity.toString(),
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly
-                                ],
-                                textAlign: TextAlign.center,
-                                decoration: const InputDecoration(
-                                  contentPadding:
-                                      EdgeInsets.symmetric(vertical: 8.0),
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                onFieldSubmitted: (value) {
-                                  int? newQuantity = int.tryParse(value) ?? 1;
-                                  if (newQuantity < 1) {
-                                    newQuantity = 1;
-                                  }
-                                  setState(() {
-                                    product.quantity = newQuantity!;
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
+                      child: Text(
+                        'Total:\n\$${totalPrice.toStringAsFixed(2)}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16.0,
+                          color: Color(0xFF2196F3),
                         ),
                       ),
-                    );
-                  },
-                ),
-        ),
-      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16.0),
+                  Expanded(flex: 3, child: _buildCombinedProductSearchBar()),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16.0),
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  _buildLoyalCustomerField(),
+                  const SizedBox(width: 16.0),
+                  _buildAutoPrintCheckbox(),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16.0),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _clearCurrentSession,
+              icon: const Icon(Icons.clear_all),
+              label: const Text('Clear Session'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFF44336), // Material Red
+              ),
+            ),
+          ),
+          const SizedBox(height: 8.0),
+          Expanded(
+            child: session.selectedProducts.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_cart_outlined,
+                            size: 48, color: Colors.blue[300]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No products selected.',
+                          style: TextStyle(
+                            fontSize: 16.0,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: session.selectedProducts.length,
+                    itemBuilder: (context, index) => _buildProductListItem(
+                      session.selectedProducts[index],
+                      index,
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -603,23 +608,217 @@ class _SellingScreenState extends State<SellingScreen>
     });
   }
 
+  void _switchToSession(int index) {
+    if (index < sessions.length) {
+      _tabController.animateTo(index);
+    } else if (index == sessions.length && sessions.length < maxSessions) {
+      _addNewSession();
+    }
+  }
+
+  // Show dialog to input quantity multiplier
+  void _showQuantityDialog() {
+    if (sessions[_tabController.index].selectedProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No products selected to modify quantity'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final lastIndex =
+        sessions[_tabController.index].selectedProducts.length - 1;
+    final product = sessions[_tabController.index].selectedProducts[lastIndex];
+    final TextEditingController quantityController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Set Quantity for ${product.name}'),
+        content: TextField(
+          controller: quantityController,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Enter quantity',
+            hintText: 'e.g., 5',
+            border: OutlineInputBorder(),
+          ),
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+          ],
+          onSubmitted: (value) {
+            _validateAndSetQuantity(value, product, context);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _validateAndSetQuantity(
+                  quantityController.text, product, context);
+            },
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _validateAndSetQuantity(
+      String value, Product product, BuildContext context) {
+    final quantity = int.tryParse(value);
+    if (quantity != null && quantity > 0) {
+      setState(() {
+        product.quantity = quantity;
+      });
+      Navigator.pop(context);
+      _searchFocusNode.requestFocus();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid quantity'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  // Update the product list item to use the same validation
+  Widget _buildProductListItem(Product product, int index) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        title: Text(
+          product.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Text(
+          'Price: \$${product.price.toStringAsFixed(2)}',
+          style: TextStyle(
+            color: Colors.blue[700],
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              color: const Color(0xFFF44336),
+              tooltip: 'Delete Item',
+              onPressed: () => _deleteProduct(index),
+            ),
+            Container(
+              width: 80,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: InkWell(
+                onTap: () {
+                  final TextEditingController quantityController =
+                      TextEditingController(
+                    text: product.quantity.toString(),
+                  );
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text('Set Quantity for ${product.name}'),
+                      content: TextField(
+                        controller: quantityController,
+                        keyboardType: TextInputType.number,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Enter quantity',
+                          hintText: 'e.g., 5',
+                          border: OutlineInputBorder(),
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onSubmitted: (value) {
+                          _validateAndSetQuantity(value, product, context);
+                        },
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            _validateAndSetQuantity(
+                                quantityController.text, product, context);
+                          },
+                          child: const Text('Set'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: Center(
+                  child: Text(
+                    '${product.quantity}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.blue[700],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // If _tabController is not yet initialized, show a loading indicator.
     if (_tabController == null) {
       return const Center(child: CircularProgressIndicator());
     }
     return KeyboardListener(
       focusNode: _focusNode,
       autofocus: true,
-      // Empty callback; shortcut conditions removed.
-      onKeyEvent: (_) {},
+      onKeyEvent: _handleKeyEvent,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Selling Screen'),
+          elevation: 0,
+          backgroundColor: const Color(0xFF2196F3), // Material Blue
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(48.0),
-            child: _buildTabBar(),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF2196F3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: _buildTabBar(),
+            ),
           ),
           actions: [
             if (sessions.length > 1)
@@ -636,17 +835,43 @@ class _SellingScreenState extends State<SellingScreen>
                     onPressed: _showPaymentDialog,
                     label: const Text("Payment"),
                     icon: const Icon(Icons.payment),
+                    elevation: 4,
+                    backgroundColor: const Color(0xFF4CAF50), // Material Green
                   )
                 : null,
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            for (final session in sessions) _buildSessionContent(session),
-            Container(
-              child:
-                  Center(child: Text("Tap the '+' tab to add a new session")),
-            )
-          ],
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.blue[50]!,
+                Colors.blue[100]!,
+              ],
+            ),
+          ),
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              for (final session in sessions) _buildSessionContent(session),
+              Container(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_circle_outline,
+                          size: 48, color: Colors.blue[300]),
+                      const SizedBox(height: 16),
+                      Text(
+                        "Tap the '+' tab to add a new session",
+                        style: TextStyle(color: Colors.blue[700]),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            ],
+          ),
         ),
       ),
     );
